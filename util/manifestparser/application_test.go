@@ -87,5 +87,160 @@ random-route: true
 				Expect(application.RandomRoute).To(BeTrue())
 			})
 		})
+
+		Context("when buildpacks is provided", func() {
+			BeforeEach(func() {
+				rawYAML = []byte(`---
+buildpacks:
+- ruby_buildpack
+- java_buildpack
+`)
+			})
+
+			It("unmarshals the buildpacks property", func() {
+				Expect(executeErr).ToNot(HaveOccurred())
+				Expect(application.Buildpacks).To(Equal([]string{"ruby_buildpack", "java_buildpack"}))
+			})
+		})
+
+		Context("when stack is provided", func() {
+			BeforeEach(func() {
+				rawYAML = []byte(`---
+stack: cflinuxfs3
+`)
+			})
+
+			It("unmarshals the stack property", func() {
+				Expect(executeErr).ToNot(HaveOccurred())
+				Expect(application.Stack).To(Equal("cflinuxfs3"))
+			})
+		})
+
+		Context("when Processes are provided", func() {
+			BeforeEach(func() {
+				rawYAML = []byte(`---
+processes: []
+`)
+			})
+
+			It("unmarshals the processes property", func() {
+				Expect(executeErr).ToNot(HaveOccurred())
+				Expect(application.Processes).To(Equal([]ProcessModel{}))
+			})
+		})
+
+		Context("process-level configuration", func() {
+			Context("the Type command is always provided", func() {
+				BeforeEach(func() {
+					rawYAML = []byte(`---
+processes:
+- type: web
+`)
+				})
+
+				It("unmarshals the processes property with the type", func() {
+					Expect(executeErr).ToNot(HaveOccurred())
+					Expect(application.Processes).To(Equal([]ProcessModel{
+						{Type: "web"},
+					}))
+				})
+			})
+
+			Context("when the start command is provided", func() {
+				BeforeEach(func() {
+					rawYAML = []byte(`---
+processes:
+- command: /bin/python
+`)
+				})
+
+				It("unmarshals the processes property with the start command", func() {
+					Expect(executeErr).ToNot(HaveOccurred())
+					Expect(application.Processes).To(Equal([]ProcessModel{
+						{StartCommand: "/bin/python"},
+					}))
+				})
+			})
+
+			Context("when a disk quota is provided", func() {
+				BeforeEach(func() {
+					rawYAML = []byte(`---
+processes:
+- disk_quota: 5GB
+`)
+				})
+
+				It("unmarshals the processes property with the disk quota", func() {
+					Expect(executeErr).ToNot(HaveOccurred())
+					Expect(application.Processes).To(Equal([]ProcessModel{
+						{DiskQuota: "5GB"},
+					}))
+				})
+			})
+
+			Context("when a health check endpoint is provided", func() {
+				BeforeEach(func() {
+					rawYAML = []byte(`---
+processes:
+- health-check-http-endpoint: https://localhost
+`)
+				})
+
+				It("unmarshals the processes property with the health check endpoint", func() {
+					Expect(executeErr).ToNot(HaveOccurred())
+					Expect(application.Processes).To(Equal([]ProcessModel{
+						{HealthCheckEndpoint: "https://localhost"},
+					}))
+				})
+			})
+
+			Context("when a health check type is provided", func() {
+				BeforeEach(func() {
+					rawYAML = []byte(`---
+processes:
+- health-check-type: http
+`)
+				})
+
+				It("unmarshals the processes property with the health check type", func() {
+					Expect(executeErr).ToNot(HaveOccurred())
+					Expect(application.Processes).To(Equal([]ProcessModel{
+						{HealthCheckType: "http"},
+					}))
+				})
+			})
+
+			Context("when a memory limit is provided", func() {
+				BeforeEach(func() {
+					rawYAML = []byte(`---
+processes:
+- memory: 512M
+`)
+				})
+
+				It("unmarshals the processes property with the memory limit", func() {
+					Expect(executeErr).ToNot(HaveOccurred())
+					Expect(application.Processes).To(Equal([]ProcessModel{
+						{Memory: "512M"},
+					}))
+				})
+			})
+
+			Context("when instances are provided", func() {
+				BeforeEach(func() {
+					rawYAML = []byte(`---
+processes:
+- instances: 4
+`)
+				})
+
+				It("unmarshals the processes property with instances", func() {
+					Expect(executeErr).ToNot(HaveOccurred())
+					Expect(application.Processes).To(Equal([]ProcessModel{
+						{Instances: 4},
+					}))
+				})
+			})
+		})
 	})
 })

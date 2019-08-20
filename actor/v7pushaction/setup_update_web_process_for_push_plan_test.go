@@ -33,7 +33,7 @@ var _ = Describe("SetupUpdateWebProcessForPushPlan", func() {
 	})
 
 	When("start command, health check type, and health check timeout are not set", func() {
-		It("skips the UpdateWebProcess on the push plan", func() {
+		It("skips the UpdateFirstAppWebProcess on the push plan", func() {
 			Expect(executeErr).ToNot(HaveOccurred())
 
 			Expect(expectedPushPlan.UpdateWebProcess).To(Equal(v7action.Process{}))

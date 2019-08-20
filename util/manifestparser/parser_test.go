@@ -15,8 +15,8 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-var _ = Describe("Parser", func() {
-	var parser *Parser
+var _ = Describe("ParsedManifest", func() {
+	var parser *ParsedManifest
 
 	BeforeEach(func() {
 		parser = NewParser()
@@ -32,8 +32,8 @@ var _ = Describe("Parser", func() {
 		When("given a valid manifest file", func() {
 			BeforeEach(func() {
 				parser.Applications = []Application{
-					{ApplicationModel: ApplicationModel{Name: "app-1"}, FullUnmarshalledApplication: nil},
-					{ApplicationModel: ApplicationModel{Name: "app-2"}, FullUnmarshalledApplication: nil}}
+					{ApplicationModel: ApplicationModel{Name: "app-1"}},
+					{ApplicationModel: ApplicationModel{Name: "app-2"}}}
 			})
 
 			It("gets the app names", func() {
@@ -106,8 +106,8 @@ applications:
 		When("given a valid manifest file with multiple apps", func() {
 			BeforeEach(func() {
 				parser.Applications = []Application{
-					{ApplicationModel: ApplicationModel{Name: "app-1"}, FullUnmarshalledApplication: nil},
-					{ApplicationModel: ApplicationModel{Name: "app-2"}, FullUnmarshalledApplication: nil}}
+					{ApplicationModel: ApplicationModel{Name: "app-1"}},
+					{ApplicationModel: ApplicationModel{Name: "app-2"}}}
 			})
 
 			It("returns true", func() {
@@ -117,7 +117,7 @@ applications:
 
 		When("given a valid manifest file with a single app", func() {
 			BeforeEach(func() {
-				parser.Applications = []Application{{ApplicationModel: ApplicationModel{Name: "app-1"}, FullUnmarshalledApplication: nil}}
+				parser.Applications = []Application{{ApplicationModel: ApplicationModel{Name: "app-1"}}}
 			})
 
 			It("returns false", func() {
@@ -131,8 +131,8 @@ applications:
 			When("the image is public", func() {
 				BeforeEach(func() {
 					parser.Applications = []Application{
-						{ApplicationModel: ApplicationModel{Name: "app-1", Docker: &Docker{Image: "image-1"}}, FullUnmarshalledApplication: nil},
-						{ApplicationModel: ApplicationModel{Name: "app-2", Docker: &Docker{Image: "image-2"}}, FullUnmarshalledApplication: nil}}
+						{ApplicationModel: ApplicationModel{Name: "app-1", Docker: &Docker{Image: "image-1"}}},
+						{ApplicationModel: ApplicationModel{Name: "app-2", Docker: &Docker{Image: "image-2"}}}}
 				})
 
 				It("returns false", func() {

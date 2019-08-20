@@ -110,25 +110,25 @@ var _ = Describe("push with a simple manifest and flags", func() {
 		)
 	})
 
-	FWhen("pushing a single app from the manifest", func() {
-		DescribeTable("errors on an invalid combination of manifest property & flag override",
-			func(flags []string, manifestProperties map[string]string) {
-				helpers.WithHelloWorldApp(func(dir string) {
-					manifestProperties["name"] = "some-app"
-
-					helpers.WriteManifest(filepath.Join(dir, "manifest.yml"), map[string]interface{}{
-						"applications": []map[string]string{
-							manifestProperties,
-						},
-					})
-
-					args := append([]string{PushCommandName}, flags...)
-					session := helpers.CustomCF(helpers.CFEnv{WorkingDirectory: dir}, args...)
-					Eventually(session.Err).Should(Say(regexp.QuoteMeta("Incorrect Usage: Command line flags (except -f and --no-start) cannot be applied when pushing multiple apps from a manifest file.")))
-					Eventually(session).Should(Exit(1))
-				})
-			},
-			Entry("no-route", []string{"--no-route"}, map[string]string{"no-route": "true"}),
-		)
-	})
+	//FWhen("pushing a single app from the manifest", func() {
+	//	DescribeTable("errors on an invalid combination of manifest property & flag override",
+	//		func(flags []string, manifestProperties map[string]string) {
+	//			helpers.WithHelloWorldApp(func(dir string) {
+	//				manifestProperties["name"] = "some-app"
+	//
+	//				helpers.WriteManifest(filepath.Join(dir, "manifest.yml"), map[string]interface{}{
+	//					"applications": []map[string]string{
+	//						manifestProperties,
+	//					},
+	//				})
+	//
+	//				args := append([]string{PushCommandName}, flags...)
+	//				session := helpers.CustomCF(helpers.CFEnv{WorkingDirectory: dir}, args...)
+	//				Eventually(session.Err).Should(Say(regexp.QuoteMeta("Incorrect Usage: Command line flags (except -f and --no-start) cannot be applied when pushing multiple apps from a manifest file.")))
+	//				Eventually(session).Should(Exit(1))
+	//			})
+	//		},
+	//		Entry("no-route", []string{"--no-route"}, map[string]string{"no-route": "true"}),
+	//	)
+	//})
 })

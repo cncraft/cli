@@ -1,6 +1,7 @@
 package v7
 
 import (
+	"fmt"
 	"os"
 	"strings"
 
@@ -37,6 +38,7 @@ type ProgressBar interface {
 //go:generate counterfeiter . PushActor
 
 type PushActor interface {
+	TransformManifest(baseManifest manifestparser.ParsedManifest, flagOverrides v7pushaction.FlagOverrides) (manifestparser.ParsedManifest, error)
 	CreatePushPlans(appNameArg string, spaceGUID string, orgGUID string, parser v7pushaction.ManifestParser, overrides v7pushaction.FlagOverrides) ([]v7pushaction.PushPlan, error)
 	// Prepare the space by creating needed apps/applying the manifest
 	PrepareSpace(pushPlans []v7pushaction.PushPlan, parser v7pushaction.ManifestParser) ([]string, <-chan *v7pushaction.PushEvent)
@@ -58,6 +60,7 @@ type V7ActorForPush interface {
 
 type ManifestParser interface {
 	v7pushaction.ManifestParser
+	GetParsedManifest() manifestparser.ParsedManifest
 	ContainsMultipleApps() bool
 	InterpolateAndParse(pathToManifest string, pathsToVarsFiles []string, vars []template.VarKV, appName string) error
 	ContainsPrivateDockerImages() bool
@@ -73,7 +76,7 @@ type PushCommand struct {
 	OptionalArgs            flag.OptionalAppName                `positional-args:"yes"`
 	HealthCheckTimeout      flag.PositiveInteger                `long:"app-start-timeout" short:"t" description:"Time (in seconds) allowed to elapse between starting up an app and the first healthy response from the app"`
 	Buildpacks              []string                            `long:"buildpack" short:"b" description:"Custom buildpack by name (e.g. my-buildpack) or Git URL (e.g. 'https://github.com/cloudfoundry/java-buildpack.git') or Git URL with a branch or tag (e.g. 'https://github.com/cloudfoundry/java-buildpack.git#v3.3.0' for 'v3.3.0' tag). To use built-in buildpacks only, specify 'default' or 'null'"`
-	Disk                    flag.Megabytes                      `long:"disk" short:"k" description:"Disk limit (e.g. 256M, 1024M, 1G)"`
+	Disk                    string                              `long:"disk" short:"k" description:"Disk limit (e.g. 256M, 1024M, 1G)"`
 	DockerImage             flag.DockerImage                    `long:"docker-image" short:"o" description:"Docker image to use (e.g. user/docker-image-name)"`
 	DockerUsername          string                              `long:"docker-username" description:"Repository username; used with password from environment variable CF_DOCKER_PASSWORD"`
 	DropletPath             flag.PathWithExistenceCheck         `long:"droplet" description:"Path to a tgz file with a pre-staged app"`
@@ -81,13 +84,13 @@ type PushCommand struct {
 	HealthCheckType         flag.HealthCheckType                `long:"health-check-type" short:"u" description:"Application health check type. Defaults to 'port'. 'http' requires a valid endpoint, for example, '/health'."`
 	Instances               flag.Instances                      `long:"instances" short:"i" description:"Number of instances"`
 	PathToManifest          flag.ManifestPathWithExistenceCheck `long:"manifest" short:"f" description:"Path to manifest"`
-	Memory                  flag.Megabytes                      `long:"memory" short:"m" description:"Memory limit (e.g. 256M, 1024M, 1G)"`
+	Memory                  string                              `long:"memory" short:"m" description:"Memory limit (e.g. 256M, 1024M, 1G)"`
 	NoManifest              bool                                `long:"no-manifest" description:""`
 	NoRoute                 bool                                `long:"no-route" description:"Do not map a route to this app"`
 	NoStart                 bool                                `long:"no-start" description:"Do not stage and start the app after pushing"`
 	NoWait                  bool                                `long:"no-wait" description:"Do not wait for the long-running operation to complete; push exits when one instance of the web process is healthy"`
 	AppPath                 flag.PathWithExistenceCheck         `long:"path" short:"p" description:"Path to app directory or to a zip file of the contents of the app directory"`
-	RandomRoute             bool                                `long:"random-route" description:"Create a random route for this app"`
+	RandomRoute             bool                                `long:"random-route" description:"Create a random route for this app (except when no-route is specified in the manifest)"`
 	Stack                   string                              `long:"stack" short:"s" description:"Stack to use (a stack is a pre-built file system, including an operating system, that can run apps)"`
 	StartCommand            flag.Command                        `long:"start-command" short:"c" description:"Startup command, set to null to reset to default start command"`
 	Strategy                flag.DeploymentStrategy             `long:"strategy" description:"Deployment strategy, either rolling or null."`
@@ -144,13 +147,8 @@ func (cmd PushCommand) Execute(args []string) error {
 		return err
 	}
 
-	if !cmd.NoManifest {
-		if err = cmd.ReadManifest(); err != nil {
-			return err
-		}
-	}
-
-	err = cmd.ValidateFlags()
+	// GET BASE MANIFEST (either read from disk, or start with new empty manifest)
+	baseManifest, err := cmd.GetBaseManifest()
 	if err != nil {
 		return err
 	}
@@ -160,72 +158,106 @@ func (cmd PushCommand) Execute(args []string) error {
 		return err
 	}
 
-	err = cmd.ValidateAllowedFlagsForMultipleApps(cmd.ManifestParser.ContainsMultipleApps())
+	err = cmd.ValidateFlags()
 	if err != nil {
 		return err
 	}
 
-	flagOverrides.DockerPassword, err = cmd.GetDockerPassword(flagOverrides.DockerUsername, cmd.ManifestParser.ContainsPrivateDockerImages())
+	// TRANSFORM MANIFEST
+	//   start with the base manifest
+	//   for each flag, create a function that transforms the manifest according to the flag
+	//   end with the transformed manifest
+	transformedManifest, err := cmd.Actor.TransformManifest(baseManifest, flagOverrides)
 	if err != nil {
 		return err
 	}
 
-	pushPlans, err := cmd.Actor.CreatePushPlans(
-		cmd.OptionalArgs.AppName,
-		cmd.Config.TargetedSpace().GUID,
-		cmd.Config.TargetedOrganization().GUID,
-		cmd.ManifestParser,
-		flagOverrides,
-	)
+	// APPLY MANIFEST (hit /apply_manifest endpoint with transformed manifest)
+	err = cmd.Actor.ApplySpaceManifest(transformedManifest.RawManifest())
 	if err != nil {
 		return err
 	}
 
-	appNames, eventStream := cmd.Actor.PrepareSpace(pushPlans, cmd.ManifestParser)
-	err = cmd.eventStreamHandler(eventStream)
+	// DONE FOR NOW
 
-	if err != nil {
-		return err
-	}
-
-	if len(appNames) == 0 {
-		return translatableerror.AppNameOrManifestRequiredError{}
-	}
-
-	user, err := cmd.Config.CurrentUser()
-	if err != nil {
-		return err
-	}
-
-	cmd.announcePushing(appNames, user)
-
-	cmd.UI.DisplayText("Getting app info...")
-	log.Info("generating the app plan")
-
-	pushPlans, warnings, err := cmd.Actor.UpdateApplicationSettings(pushPlans)
-	cmd.UI.DisplayWarnings(warnings)
-	if err != nil {
-		return err
-	}
-	log.WithField("number of plans", len(pushPlans)).Debug("completed generating plan")
-
-	for _, plan := range pushPlans {
-		log.WithField("app_name", plan.Application.Name).Info("actualizing")
-		eventStream := cmd.Actor.Actualize(plan, cmd.ProgressBar)
-		err := cmd.eventStreamHandler(eventStream)
-
-		if cmd.shouldDisplaySummary(err) {
-			summaryErr := cmd.displayAppSummary(plan)
-			if summaryErr != nil {
-				return summaryErr
-			}
-		}
-		if err != nil {
-			return cmd.mapErr(plan.Application.Name, err)
-		}
-	}
+	//flagOverrides.DockerPassword, err = cmd.GetDockerPassword(flagOverrides.DockerUsername, cmd.ManifestParser.ContainsPrivateDockerImages())
+	//if err != nil {
+	//	return err
+	//}
+	//
+	//pushPlans, err := cmd.Actor.CreatePushPlans(
+	//	cmd.OptionalArgs.AppName,
+	//	cmd.Config.TargetedSpace().GUID,
+	//	cmd.Config.TargetedOrganization().GUID,
+	//	cmd.ManifestParser,
+	//	flagOverrides,
+	//)
+	//if err != nil {
+	//	return err
+	//}
+	//
+	//appNames, eventStream := cmd.Actor.PrepareSpace(pushPlans, cmd.ManifestParser)
+	//err = cmd.eventStreamHandler(eventStream)
+	//
+	//if err != nil {
+	//	return err
+	//}
+	//
+	//if len(appNames) == 0 {
+	//	return translatableerror.AppNameOrManifestRequiredError{}
+	//}
+	//
+	//user, err := cmd.Config.CurrentUser()
+	//if err != nil {
+	//	return err
+	//}
+	//
+	//cmd.announcePushing(appNames, user)
+	//
+	//cmd.UI.DisplayText("Getting app info...")
+	//log.Info("generating the app plan")
+	//
+	//pushPlans, warnings, err := cmd.Actor.UpdateApplicationSettings(pushPlans)
+	//cmd.UI.DisplayWarnings(warnings)
+	//if err != nil {
+	//	return err
+	//}
+	//log.WithField("number of plans", len(pushPlans)).Debug("completed generating plan")
+	//
+	//for _, plan := range pushPlans {
+	//	log.WithField("app_name", plan.Application.Name).Info("actualizing")
+	//	eventStream := cmd.Actor.Actualize(plan, cmd.ProgressBar)
+	//	err := cmd.eventStreamHandler(eventStream)
+	//
+	//	if cmd.shouldDisplaySummary(err) {
+	//		summaryErr := cmd.displayAppSummary(plan)
+	//		if summaryErr != nil {
+	//			return summaryErr
+	//		}
+	//	}
+	//	if err != nil {
+	//		return cmd.mapErr(plan.Application.Name, err)
+	//	}
+	//}
 
 	return nil
+}
+
+func (cmd PushCommand) GetBaseManifest() (manifestparser.ParsedManifest, error) {
+	// if no-manifest flag is passed
+	//   return an empty manifest
+	if cmd.NoManifest {
+		return cmd.ManifestParser.GetParsedManifest(), nil
+	}
+
+	// read manifest file from disk & parse it (if it exists)
+	err := cmd.ReadManifest()
+	if err != nil {
+		return manifestparser.ParsedManifest{}, err
+	}
+
+	// return parsed manifest.yml
+	return cmd.ManifestParser.GetParsedManifest(), nil
 }
 
 func (cmd PushCommand) shouldDisplaySummary(err error) bool {
@@ -436,23 +468,25 @@ func (cmd PushCommand) ReadManifest() error {
 
 func (cmd PushCommand) GetFlagOverrides() (v7pushaction.FlagOverrides, error) {
 	return v7pushaction.FlagOverrides{
+		AppName:             cmd.OptionalArgs.AppName,
 		Buildpacks:          cmd.Buildpacks,
 		Stack:               cmd.Stack,
-		Disk:                cmd.Disk.NullUint64,
+		Disk:                cmd.Disk,
 		DropletPath:         string(cmd.DropletPath),
 		DockerImage:         cmd.DockerImage.Path,
 		DockerUsername:      cmd.DockerUsername,
 		HealthCheckEndpoint: cmd.HealthCheckHTTPEndpoint,
 		HealthCheckType:     cmd.HealthCheckType.Type,
-		HealthCheckTimeout:  cmd.HealthCheckTimeout.Value, Instances: cmd.Instances.NullInt,
-		Memory:          cmd.Memory.NullUint64,
-		NoStart:         cmd.NoStart,
-		NoWait:          cmd.NoWait,
-		ProvidedAppPath: string(cmd.AppPath),
-		NoRoute:         cmd.NoRoute,
-		RandomRoute:     cmd.RandomRoute,
-		StartCommand:    cmd.StartCommand.FilteredString,
-		Strategy:        cmd.Strategy.Name,
+		HealthCheckTimeout:  cmd.HealthCheckTimeout.Value,
+		Instances:           cmd.Instances.NullInt,
+		Memory:              cmd.Memory,
+		NoStart:             cmd.NoStart,
+		NoWait:              cmd.NoWait,
+		ProvidedAppPath:     string(cmd.AppPath),
+		NoRoute:             cmd.NoRoute,
+		RandomRoute:         cmd.RandomRoute,
+		StartCommand:        cmd.StartCommand.FilteredString,
+		Strategy:            cmd.Strategy.Name,
 	}, nil
 }
 
@@ -461,20 +495,9 @@ func (cmd PushCommand) ValidateAllowedFlagsForMultipleApps(containsMultipleApps 
 		return nil
 	}
 
-	allowedFlagsMultipleApps := !(len(cmd.Buildpacks) > 0 ||
-		cmd.Disk.IsSet ||
-		cmd.DockerImage.Path != "" ||
-		cmd.DockerUsername != "" ||
+	allowedFlagsMultipleApps := !(
 		cmd.DropletPath != "" ||
-		cmd.HealthCheckType.Type != "" ||
-		cmd.HealthCheckHTTPEndpoint != "" ||
-		cmd.HealthCheckTimeout.Value > 0 ||
-		cmd.Instances.IsSet ||
-		cmd.Stack != "" ||
-		cmd.Memory.IsSet ||
 		cmd.AppPath != "" ||
-		cmd.NoRoute ||
-		cmd.StartCommand.IsSet ||
 		cmd.Strategy.Name != "")
 
 	if containsMultipleApps && !allowedFlagsMultipleApps {
@@ -586,30 +609,6 @@ func (cmd PushCommand) ValidateFlags() error {
 			},
 		}
 
-	}
-
-	if len(cmd.ManifestParser.Apps()) == 1 {
-		app := cmd.ManifestParser.Apps()[0]
-
-		switch {
-		case len(cmd.Buildpacks) > 0 && app.Docker != nil:
-			return translatableerror.ArgumentManifestMismatchError{
-				Arg:              "--buildpack, -b",
-				ManifestProperty: "docker",
-			}
-
-		case len(cmd.AppPath) > 0 && app.Docker != nil:
-			return translatableerror.ArgumentManifestMismatchError{
-				Arg:              "--path, -p",
-				ManifestProperty: "docker",
-			}
-
-		case len(cmd.DockerImage.Path) > 0 && app.Path != "":
-			return translatableerror.ArgumentManifestMismatchError{
-				Arg:              "--docker-image, -o",
-				ManifestProperty: "path",
-			}
-		}
 	}
 
 	return nil

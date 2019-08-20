@@ -18,6 +18,7 @@ type Actor struct {
 
 	PreparePushPlanSequence   []UpdatePushPlanFunc
 	ChangeApplicationSequence func(plan PushPlan) []ChangeApplicationFunc
+	TransformManifestSequence []TransformManifestFunc
 	RandomWordGenerator       RandomWordGenerator
 
 	startWithProtocol *regexp.Regexp
@@ -36,6 +37,22 @@ func NewActor(v3Actor V7Actor, sharedActor SharedActor) *Actor {
 		RandomWordGenerator: new(randomword.Generator),
 		startWithProtocol:   regexp.MustCompile(ProtocolRegexp),
 		urlValidator:        regexp.MustCompile(URLRegexp),
+	}
+
+	actor.TransformManifestSequence = []TransformManifestFunc{
+		TransformManifestWithAppNameArg,
+		TransformManifestWithInstancesFlag,
+		TransformManifestWithStartCommandFlag,
+		TransformManifestWithHealthCheckTypeFlag,
+		TransformManifestWithHealthCheckEndpointFlag,
+		TransformManifestWithHealthCheckTimeoutFlag,
+		TransformManifestWithMemoryFlag,
+		TransformManifestWithNoRouteFlag,
+		TransformManifestWithRandomRouteFlag,
+		TransformManifestWithDockerImageFlag,
+		TransformManifestWithDockerUsernameFlag,
+		TransformManifestWithStackFlag,
+		TransformManifestWithBuildpacksFlag,
 	}
 
 	actor.PreparePushPlanSequence = []UpdatePushPlanFunc{

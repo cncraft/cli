@@ -45,9 +45,10 @@ type PushPlan struct {
 }
 
 type FlagOverrides struct {
+	AppName             string
 	Buildpacks          []string
 	Stack               string
-	Disk                types.NullUint64
+	Disk                string
 	DropletPath         string
 	DockerImage         string
 	DockerPassword      string
@@ -56,7 +57,7 @@ type FlagOverrides struct {
 	HealthCheckTimeout  int64
 	HealthCheckType     constant.HealthCheckType
 	Instances           types.NullInt
-	Memory              types.NullUint64
+	Memory              string
 	NoStart             bool
 	NoWait              bool
 	ProvidedAppPath     string

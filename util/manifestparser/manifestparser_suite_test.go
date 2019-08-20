@@ -11,7 +11,7 @@ import (
 
 func TestManifestparser(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "Manifest Parser Suite")
+	RunSpecs(t, "Manifest ParsedManifest Suite")
 }
 
 func WriteManifest(path string, manifest map[string]interface{}) {

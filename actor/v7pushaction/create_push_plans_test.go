@@ -68,13 +68,13 @@ var _ = Describe("CreatePushPlans", func() {
 					ApplicationModel: manifestparser.ApplicationModel{
 						Name: "my-app",
 					},
-					FullUnmarshalledApplication: nil,
+					//FullUnmarshalledApplication: nil,
 				},
 				{
 					ApplicationModel: manifestparser.ApplicationModel{
 						Name: "spencers-app",
 					},
-					FullUnmarshalledApplication: nil,
+					//FullUnmarshalledApplication: nil,
 				},
 			})
 

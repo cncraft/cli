@@ -1,8 +1,6 @@
 package v7pushaction_test
 
 import (
-	"code.cloudfoundry.org/cli/api/cloudcontroller/ccv3/constant"
-	"code.cloudfoundry.org/cli/types"
 	"code.cloudfoundry.org/cli/util/manifestparser"
 
 	"code.cloudfoundry.org/cli/actor/v7action"
@@ -41,51 +39,51 @@ var _ = Describe("SetupScaleWebProcessForPushPlan", func() {
 		})
 	})
 
-	When("when the disk is set on flag overrides", func() {
-		BeforeEach(func() {
-			overrides.Disk = types.NullUint64{IsSet: true, Value: 555}
-		})
+	//When("when the disk is set on flag overrides", func() {
+	//	BeforeEach(func() {
+	//		overrides.Disk = types.NullUint64{IsSet: true, Value: 555}
+	//	})
+	//
+	//	It("sets the disk on the push plan", func() {
+	//		Expect(executeErr).ToNot(HaveOccurred())
+	//
+	//		Expect(expectedPushPlan.ScaleWebProcess).To(Equal(v7action.Process{
+	//			Type:     constant.ProcessTypeWeb,
+	//			DiskInMB: types.NullUint64{IsSet: true, Value: 555},
+	//		}))
+	//		Expect(expectedPushPlan.ScaleWebProcessNeedsUpdate).To(BeTrue())
+	//	})
+	//})
 
-		It("sets the disk on the push plan", func() {
-			Expect(executeErr).ToNot(HaveOccurred())
-
-			Expect(expectedPushPlan.ScaleWebProcess).To(Equal(v7action.Process{
-				Type:     constant.ProcessTypeWeb,
-				DiskInMB: types.NullUint64{IsSet: true, Value: 555},
-			}))
-			Expect(expectedPushPlan.ScaleWebProcessNeedsUpdate).To(BeTrue())
-		})
-	})
-
-	When("when the instances is set on flag overrides", func() {
-		BeforeEach(func() {
-			overrides.Instances = types.NullInt{IsSet: true, Value: 555}
-		})
-
-		It("sets the instances on the push plan", func() {
-			Expect(executeErr).ToNot(HaveOccurred())
-
-			Expect(expectedPushPlan.ScaleWebProcess).To(Equal(v7action.Process{
-				Type:      constant.ProcessTypeWeb,
-				Instances: types.NullInt{IsSet: true, Value: 555},
-			}))
-			Expect(expectedPushPlan.ScaleWebProcessNeedsUpdate).To(BeTrue())
-		})
-	})
-
-	When("when the memory is set on flag overrides", func() {
-		BeforeEach(func() {
-			overrides.Memory = types.NullUint64{IsSet: true, Value: 555}
-		})
-
-		It("sets the memory on the push plan", func() {
-			Expect(executeErr).ToNot(HaveOccurred())
-
-			Expect(expectedPushPlan.ScaleWebProcess).To(Equal(v7action.Process{
-				Type:       constant.ProcessTypeWeb,
-				MemoryInMB: types.NullUint64{IsSet: true, Value: 555},
-			}))
-			Expect(expectedPushPlan.ScaleWebProcessNeedsUpdate).To(BeTrue())
-		})
-	})
+	//When("when the instances is set on flag overrides", func() {
+	//	BeforeEach(func() {
+	//		overrides.Instances = types.NullInt{IsSet: true, Value: 555}
+	//	})
+	//
+	//	It("sets the instances on the push plan", func() {
+	//		Expect(executeErr).ToNot(HaveOccurred())
+	//
+	//		Expect(expectedPushPlan.ScaleWebProcess).To(Equal(v7action.Process{
+	//			Type:      constant.ProcessTypeWeb,
+	//			Instances: types.NullInt{IsSet: true, Value: 555},
+	//		}))
+	//		Expect(expectedPushPlan.ScaleWebProcessNeedsUpdate).To(BeTrue())
+	//	})
+	//})
+	//
+	//When("when the memory is set on flag overrides", func() {
+	//	BeforeEach(func() {
+	//		overrides.Memory = types.NullUint64{IsSet: true, Value: 555}
+	//	})
+	//
+	//	It("sets the memory on the push plan", func() {
+	//		Expect(executeErr).ToNot(HaveOccurred())
+	//
+	//		Expect(expectedPushPlan.ScaleWebProcess).To(Equal(v7action.Process{
+	//			Type:       constant.ProcessTypeWeb,
+	//			MemoryInMB: types.NullUint64{IsSet: true, Value: 555},
+	//		}))
+	//		Expect(expectedPushPlan.ScaleWebProcessNeedsUpdate).To(BeTrue())
+	//	})
+	//})
 })

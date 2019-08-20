@@ -2,6 +2,7 @@ package manifestparser
 
 import (
 	"errors"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -10,7 +11,7 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
-type Parser struct {
+type ParsedManifest struct {
 	Applications []Application
 
 	pathToManifest string
@@ -19,32 +20,32 @@ type Parser struct {
 	hasParsed      bool
 }
 
-func NewParser() *Parser {
-	return new(Parser)
+func NewParser() *ParsedManifest {
+	return new(ParsedManifest)
 }
 
-func (parser Parser) AppNames() []string {
+func (m ParsedManifest) AppNames() []string {
 	var names []string
-	for _, app := range parser.Applications {
+	for _, app := range m.Applications {
 		names = append(names, app.Name)
 	}
 	return names
 }
 
-func (parser Parser) Apps() []Application {
-	return parser.Applications
+func (m ParsedManifest) Apps() []Application {
+	return m.Applications
 }
 
-func (parser Parser) ContainsManifest() bool {
-	return parser.hasParsed
+func (m ParsedManifest) ContainsManifest() bool {
+	return m.hasParsed
 }
 
-func (parser Parser) ContainsMultipleApps() bool {
-	return len(parser.Applications) > 1
+func (m ParsedManifest) ContainsMultipleApps() bool {
+	return len(m.Applications) > 1
 }
 
-func (parser Parser) ContainsPrivateDockerImages() bool {
-	for _, app := range parser.Applications {
+func (m ParsedManifest) ContainsPrivateDockerImages() bool {
+	for _, app := range m.Applications {
 		if app.Docker != nil && app.Docker.Username != "" {
 			return true
 		}
@@ -52,14 +53,26 @@ func (parser Parser) ContainsPrivateDockerImages() bool {
 	return false
 }
 
-func (parser Parser) FullRawManifest() []byte {
-	return parser.rawManifest
+func (m ParsedManifest) FullRawManifest() []byte {
+	return m.rawManifest
 }
 
-func (parser Parser) GetPathToManifest() string {
-	return parser.pathToManifest
+func (m ParsedManifest) GetPathToManifest() string {
+	return m.pathToManifest
 }
 
+func (m ParsedManifest) GetParsedManifest() ParsedManifest {
+	return m
+}
+
+func (m ParsedManifest) HasAppWithNoName() bool {
+	for _, app := range m.Applications {
+		if app.Name == "" {
+			return true
+		}
+	}
+	return false
+}
 // InterpolateAndParse reads the manifest at the provided paths, interpolates
 // variables if a vars file is provided, and sets the current manifest to the
 // resulting manifest.
@@ -68,7 +81,7 @@ func (parser Parser) GetPathToManifest() string {
 // For manifests with multiple applications, appName will filter the
 // applications and leave only a single application in the resulting parsed
 // manifest structure.
-func (parser *Parser) InterpolateAndParse(pathToManifest string, pathsToVarsFiles []string, vars []template.VarKV, appName string) error {
+func (m *ParsedManifest) InterpolateAndParse(pathToManifest string, pathsToVarsFiles []string, vars []template.VarKV, appName string) error {
 	rawManifest, err := ioutil.ReadFile(pathToManifest)
 	if err != nil {
 		return err
@@ -104,13 +117,13 @@ func (parser *Parser) InterpolateAndParse(pathToManifest string, pathsToVarsFile
 		return InterpolationError{Err: err}
 	}
 
-	parser.pathToManifest = pathToManifest
-	return parser.parse(rawManifest, appName)
+	m.pathToManifest = pathToManifest
+	return m.parse(rawManifest, appName)
 }
 
-func (parser Parser) RawAppManifest(appName string) ([]byte, error) {
+func (m ParsedManifest) RawAppManifest(appName string) ([]byte, error) {
 	var appManifest manifest
-	for _, app := range parser.Applications {
+	for _, app := range m.Applications {
 		if app.Name == appName {
 			appManifest.Applications = []Application{app}
 			return yaml.Marshal(appManifest)
@@ -119,9 +132,13 @@ func (parser Parser) RawAppManifest(appName string) ([]byte, error) {
 	return nil, AppNotInManifestError{Name: appName}
 }
 
-func (parser *Parser) parse(manifestBytes []byte, appName string) error {
-	parser.rawManifest = manifestBytes
-	pathToManifest := parser.GetPathToManifest()
+func (m ParsedManifest) RawManifest() ([]byte, error) {
+	return yaml.Marshal(m)
+}
+
+func (m *ParsedManifest) parse(manifestBytes []byte, appName string) error {
+	m.rawManifest = manifestBytes
+	pathToManifest := m.GetPathToManifest()
 	var raw manifest
 
 	err := yaml.Unmarshal(manifestBytes, &raw)
@@ -133,22 +150,9 @@ func (parser *Parser) parse(manifestBytes []byte, appName string) error {
 		return errors.New("must have at least one application")
 	}
 
-	if len(raw.Applications) == 1 && appName != "" {
-		raw.Applications[0].Name = appName
-		raw.Applications[0].FullUnmarshalledApplication["name"] = appName
-	}
-
-	filteredIndex := -1
+	fmt.Printf("RAW: %v", raw.Applications)
 
 	for i := range raw.Applications {
-		if raw.Applications[i].Name == "" {
-			return errors.New("Found an application with no name specified")
-		}
-
-		if raw.Applications[i].Name == appName {
-			filteredIndex = i
-		}
-
 		if raw.Applications[i].Path == "" {
 			continue
 		}
@@ -169,18 +173,35 @@ func (parser *Parser) parse(manifestBytes []byte, appName string) error {
 		raw.Applications[i].Path = finalPath
 	}
 
-	if filteredIndex >= 0 {
-		raw.Applications = []Application{raw.Applications[filteredIndex]}
-	} else if appName != "" {
-		return AppNotInManifestError{Name: appName}
-	}
-
-	parser.Applications = raw.Applications
-	parser.rawManifest, err = yaml.Marshal(raw)
+	m.Applications = raw.Applications
+	m.rawManifest, err = yaml.Marshal(raw)
 	if err != nil {
 		return err
 	}
 
-	parser.hasParsed = true
+	m.hasParsed = true
 	return nil
+}
+
+func (m *ParsedManifest) GetFirstAppWebProcess() *ProcessModel {
+	for i, process := range m.Applications[0].Processes {
+		if process.Type == "web" {
+			return &m.Applications[0].Processes[i]
+		}
+	}
+
+	return nil
+}
+
+func (m *ParsedManifest) GetFirstApp() *Application {
+	return &m.Applications[0]
+}
+
+func (m *ParsedManifest) UpdateFirstAppWebProcess(updateFunc func(process *ProcessModel)) {
+	for i, process := range m.Applications[0].Processes {
+		if process.Type == "web" {
+			updateFunc(&m.Applications[0].Processes[i])
+			break
+		}
+	}
 }
